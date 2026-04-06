@@ -1,0 +1,109 @@
+---
+title: "Building Production RAG Systems: Lessons from the Field"
+date: "2026-03-15"
+description: "A deep dive into building reliable Retrieval-Augmented Generation systems that actually work in production — covering chunking strategies, embedding models, vector stores, and the failure modes nobody talks about."
+tags: ["RAG", "LLM", "Vector Databases", "Production AI"]
+---
+
+# Building Production RAG Systems: Lessons from the Field
+
+After shipping multiple RAG-powered products into production, I've learned that the gap between a demo that impresses stakeholders and a system that reliably serves real users is enormous. This post captures the hard-won lessons.
+
+## The Naive RAG Trap
+
+Most RAG tutorials show you a 20-line script that:
+1. Loads a PDF
+2. Chunks it naively by character count
+3. Embeds with `text-embedding-ada-002`
+4. Retrieves top-3 and shoves them into a prompt
+
+This works for demos. It fails in production.
+
+## Chunking is the Most Underrated Problem
+
+The quality of your retrieval is largely determined by the quality of your chunks. Here's what I've found works:
+
+### Semantic chunking over fixed-size chunking
+
+Fixed 512-token chunks split sentences mid-thought. Use semantic chunking that respects paragraph and sentence boundaries:
+
+```python
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=800,
+    chunk_overlap=100,
+    separators=["\n\n", "\n", ". ", " "],
+)
+```
+
+The `chunk_overlap` is critical — it ensures context doesn't fall through the cracks at chunk boundaries.
+
+### Metadata enrichment
+
+Every chunk should carry metadata. This becomes essential for filtering:
+
+```python
+chunks = splitter.create_documents(
+    texts=[doc.text],
+    metadatas=[{
+        "source": doc.source,
+        "page": doc.page,
+        "section": extract_section_header(doc.text),
+        "created_at": doc.created_at,
+    }]
+)
+```
+
+## Hybrid Search Beats Pure Vector Search
+
+Pure semantic search misses exact matches. A user asking about "GDPR Article 17" doesn't want the semantically closest chunk — they want the chunk that literally contains "Article 17".
+
+Hybrid search (combining BM25 keyword search with vector similarity) consistently outperforms either approach alone. In Pinecone, you can combine sparse and dense vectors:
+
+```python
+results = index.query(
+    vector=dense_embedding,
+    sparse_vector=bm25_sparse_vector,
+    top_k=10,
+    alpha=0.5,  # 0 = pure sparse, 1 = pure dense
+)
+```
+
+## Re-ranking is Not Optional
+
+After retrieval, run a cross-encoder re-ranker before passing to the LLM. Cross-encoders are slow but accurate — they consider both the query and the document together:
+
+```python
+from sentence_transformers import CrossEncoder
+
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+scores   = reranker.predict([(query, chunk.text) for chunk in retrieved_chunks])
+reranked = [chunk for _, chunk in sorted(zip(scores, retrieved_chunks), reverse=True)]
+context  = reranked[:3]  # Top 3 after re-ranking
+```
+
+## Evaluating RAG Without Ground Truth
+
+The hardest part of RAG in production is knowing whether it's getting better or worse after changes. Use RAGAS for automated evaluation:
+
+- **Faithfulness**: Does the answer only contain claims supported by the context?
+- **Answer Relevancy**: Does the answer address the question?
+- **Context Precision**: Are the retrieved chunks actually relevant?
+
+Build this into your CI pipeline. If a change to chunking strategy drops faithfulness below 0.8, block the deploy.
+
+## The Failure Mode Nobody Talks About
+
+**Retrieval confidence collapse**: when your embedding model hasn't seen terminology similar to your domain, all cosine similarities cluster between 0.6–0.7. The model can't distinguish between relevant and irrelevant chunks.
+
+Solutions:
+- Fine-tune your embedding model on domain data
+- Use a domain-specific model (e.g., `text-embedding-3-large` for general, `voyage-2` for code)
+- Add a relevance threshold — if max similarity < 0.75, return "I don't have information on this" rather than hallucinating
+
+## Conclusion
+
+Production RAG requires thinking about the full pipeline as a system: chunking quality → retrieval precision → re-ranking → prompt design → evaluation feedback loop. Optimize each stage, measure continuously, and never skip the evaluation layer.
+
+The 20-line demo is fine for learning. Ships require engineering.

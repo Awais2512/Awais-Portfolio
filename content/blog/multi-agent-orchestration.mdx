@@ -1,0 +1,170 @@
+---
+title: "Multi-Agent Orchestration: Patterns That Actually Scale"
+date: "2026-03-28"
+description: "Moving beyond single-LLM chains to coordinated agent networks. Covers the supervisor pattern, parallelization, state management, and the debugging hell that comes with non-deterministic agents."
+tags: ["Multi-Agent", "LangChain", "AutoGen", "AI Architecture"]
+---
+
+# Multi-Agent Orchestration: Patterns That Actually Scale
+
+Single-agent architectures hit a ceiling fast. Once you need an AI system to search the web, write code, validate it, and send a report — all in one workflow — you need multiple specialized agents coordinating toward a shared goal.
+
+Here's what I've learned building these in production.
+
+## Why Multi-Agent?
+
+The core problem with a single LLM chain is that it tries to do everything sequentially in one context window:
+
+1. Context windows fill up fast on complex tasks
+2. You can't parallelize work
+3. One failure point cascades through the entire workflow
+4. Hard to swap out individual capabilities
+
+Multi-agent systems decompose the problem: each agent is responsible for one thing and does it well.
+
+## The Supervisor Pattern
+
+The most reliable production pattern I've used is the Supervisor → Workers architecture:
+
+```
+User Query
+    ↓
+Supervisor Agent (plans and delegates)
+    ├── Research Agent (web search, data retrieval)
+    ├── Analysis Agent (data processing, calculations)
+    ├── Writer Agent (synthesis, formatting)
+    └── Validator Agent (fact-checks output)
+    ↓
+Final Response
+```
+
+The Supervisor uses structured tool calls to invoke workers — it never executes tasks itself:
+
+```python
+from langchain.agents import create_openai_tools_agent
+from langchain_core.prompts import ChatPromptTemplate
+
+supervisor_prompt = ChatPromptTemplate.from_messages([
+    ("system", """You are a supervisor orchestrating specialized agents.
+    Available agents: {agent_names}
+    Plan the task, delegate to appropriate agents, and synthesize results.
+    Always validate before returning final output."""),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
+```
+
+## State Management is Everything
+
+The biggest mistake in multi-agent systems is treating state as an afterthought. Use a typed state schema from day one:
+
+```python
+from typing import TypedDict, Annotated, List
+import operator
+
+class AgentState(TypedDict):
+    task:           str
+    research_results: List[str]
+    analysis:       str
+    draft:          str
+    validation_notes: List[str]
+    final_output:   str
+    error:          str | None
+    iteration:      Annotated[int, operator.add]
+```
+
+LangGraph makes this elegant — each node receives and returns this state:
+
+```python
+from langgraph.graph import StateGraph
+
+workflow = StateGraph(AgentState)
+workflow.add_node("research",  research_agent)
+workflow.add_node("analysis",  analysis_agent)
+workflow.add_node("writer",    writer_agent)
+workflow.add_node("validator", validator_agent)
+
+workflow.add_edge("research", "analysis")
+workflow.add_edge("analysis", "writer")
+workflow.add_conditional_edges(
+    "validator",
+    lambda state: "writer" if state["validation_notes"] else "end"
+)
+```
+
+## Parallelization with Fan-Out/Fan-In
+
+For independent subtasks, fan out to parallel agents and fan back in:
+
+```python
+from langgraph.graph import StateGraph
+from langgraph.prebuilt import ToolNode
+
+# Fan out: run research and analysis simultaneously
+workflow.add_edge("supervisor", ["web_search_agent", "database_agent"])
+
+# Fan in: merge results before synthesis
+workflow.add_edge(["web_search_agent", "database_agent"], "synthesis_agent")
+```
+
+This cuts latency dramatically for research-heavy workflows.
+
+## The Debugging Problem
+
+Non-deterministic agents are debugging nightmares. Three practices that save sanity:
+
+### 1. Structured logging at every node
+
+```python
+import structlog
+
+log = structlog.get_logger()
+
+def research_agent(state: AgentState) -> AgentState:
+    log.info("research_agent.start", task=state["task"])
+    result = run_research(state["task"])
+    log.info("research_agent.done", result_length=len(result))
+    return {**state, "research_results": [result]}
+```
+
+### 2. Deterministic test fixtures
+
+Lock down your agent tests with recorded LLM responses — don't hit the API in CI:
+
+```python
+@pytest.fixture
+def mock_llm():
+    with patch("your_module.llm") as mock:
+        mock.invoke.return_value = AIMessage(content="Test response")
+        yield mock
+```
+
+### 3. Max iteration guards
+
+Agents can loop. Always add escape hatches:
+
+```python
+MAX_ITERATIONS = 5
+
+def should_continue(state: AgentState) -> str:
+    if state["iteration"] >= MAX_ITERATIONS:
+        return "force_end"
+    if state["final_output"]:
+        return "end"
+    return "continue"
+```
+
+## When NOT to Use Multi-Agent
+
+Not every problem needs orchestration. Signs you're over-engineering:
+
+- Your "agents" just call one tool each → use a regular chain
+- You need results in under 500ms → multi-agent adds latency
+- The task is strictly sequential → a single chain is simpler
+- You haven't hit single-agent limitations yet → YAGNI
+
+Start simple. Add orchestration when you have a real bottleneck, not a theoretical one.
+
+## Conclusion
+
+Multi-agent systems are powerful but complex. The patterns that work in production: typed state, the supervisor architecture, aggressive logging, and iteration guards. Build for debuggability from day one — you'll spend more time debugging agents than writing them.
