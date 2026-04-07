@@ -100,6 +100,15 @@ export default function Experience() {
                           </li>
                         ))}
                       </ul>
+
+                      {entry.keyProjects && (
+                        <div className="mt-4 pt-3 border-t border-white/5">
+                          <p className="text-xs text-text-tertiary">
+                            <span className="text-accent-primary font-semibold">Key Projects:</span>{" "}
+                            {entry.keyProjects}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
