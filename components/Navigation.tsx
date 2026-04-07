@@ -82,16 +82,6 @@ export default function Navigation() {
               </li>
             );
           })}
-          <li>
-            <a
-              href="/resume.pdf"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium px-4 py-1.5 border border-accent-primary text-accent-primary rounded-full hover:bg-accent-primary hover:text-bg-primary transition-all"
-            >
-              Resume
-            </a>
-          </li>
         </ul>
 
         {/* Mobile Hamburger */}
@@ -127,16 +117,6 @@ export default function Navigation() {
                   </button>
                 </li>
               ))}
-              <li className="px-6 pt-2 pb-4">
-                <a
-                  href="/resume.pdf"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block text-sm font-medium px-4 py-1.5 border border-accent-primary text-accent-primary rounded-full hover:bg-accent-primary hover:text-bg-primary transition-all"
-                >
-                  Resume
-                </a>
-              </li>
             </ul>
           </motion.div>
         )}

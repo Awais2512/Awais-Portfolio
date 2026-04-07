@@ -94,7 +94,8 @@ export default function About() {
             <p className="text-text-secondary text-base sm:text-lg leading-relaxed mb-5">
               My work spans the full AI pipeline — from designing{" "}
               <span className="text-accent-primary font-medium">RAG architectures</span> and
-              fine-tuning models, to orchestrating multi-agent systems and deploying them behind
+              <span className="text-accent-primary font-medium"> fine-tuning models</span>, to orchestrating{" "}
+              <span className="text-accent-primary font-medium">multi-agent systems</span> and deploying them behind
               production APIs. I&apos;ve integrated 50+ third-party APIs and built automation
               workflows achieving 90%+ reduction in manual work.
             </p>
