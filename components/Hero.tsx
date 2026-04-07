@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { FiGithub, FiLinkedin, FiMail, FiArrowDown } from "react-icons/fi";
+import { FiArrowDown } from "react-icons/fi";
 
 const roles = [
   "AI Engineer",
@@ -193,7 +193,7 @@ export default function Hero() {
           {/* CTAs */}
           <motion.div
             variants={item}
-            className="flex flex-col sm:flex-row items-center md:items-start justify-center md:justify-start gap-4 mb-8"
+            className="flex flex-col sm:flex-row items-center md:items-start justify-center md:justify-start gap-4"
           >
             <button
               onClick={() => scrollTo("projects")}
@@ -202,31 +202,11 @@ export default function Hero() {
               View My Work
             </button>
             <button
-              onClick={() => scrollTo("contact")}
+              onClick={() => scrollTo("experience")}
               className="px-7 py-3 border border-white/20 text-text-primary font-semibold rounded-full hover:border-accent-primary hover:text-accent-primary transition-all active:scale-95"
             >
-              Get In Touch
+              My Experience
             </button>
-          </motion.div>
-
-          {/* Social Links */}
-          <motion.div variants={item} className="flex items-center justify-center md:justify-start gap-5">
-            {[
-              { href: "https://github.com/Awais2512", icon: <FiGithub size={20} />, label: "GitHub" },
-              { href: "https://www.linkedin.com/in/muhammadawis/", icon: <FiLinkedin size={20} />, label: "LinkedIn" },
-              { href: "mailto:awaisjutt2512@gmail.com", icon: <FiMail size={20} />, label: "Email" },
-            ].map(({ href, icon, label }) => (
-              <a
-                key={label}
-                href={href}
-                target={href.startsWith("mailto") ? undefined : "_blank"}
-                rel="noopener noreferrer"
-                aria-label={label}
-                className="p-2.5 text-text-tertiary border border-white/10 rounded-full hover:text-accent-primary hover:border-accent-primary transition-all"
-              >
-                {icon}
-              </a>
-            ))}
           </motion.div>
         </div>
 

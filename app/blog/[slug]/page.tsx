@@ -121,10 +121,10 @@ export default function BlogPostPage({ params }: Props) {
               <FiArrowLeft size={14} /> More posts
             </Link>
             <Link
-              href="/#contact"
+              href="/#projects"
               className="text-sm font-medium text-accent-primary border border-accent-primary/30 px-4 py-2 rounded-full hover:bg-accent-primary hover:text-bg-primary transition-all"
             >
-              Get in touch
+              View Projects
             </Link>
           </footer>
         </div>
